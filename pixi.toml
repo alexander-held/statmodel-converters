@@ -1,0 +1,19 @@
+[workspace]
+name = "statmodel-converters"
+channels = ["conda-forge"]
+platforms = [{ platform = "osx-arm64", macos = "15.0" }, "linux-64", "linux-aarch64"]
+
+[dependencies]
+python = "3.13.*"
+
+[pypi-dependencies]
+# nightly wheels built from ROOT master
+root = { version = ">=6.43.0a0", index = "https://root-experimental-python-wheels.web.cern.ch" }
+# purefunc modifier for expressions, https://github.com/scikit-hep/pyhf/pull/2717
+pyhf = { git = "https://github.com/specktakel/pyhf", rev = "4445deda7c884cc3bb6adfa9286168afb2e5acf8" }
+jax = "*"
+sympy = "*"
+pytest = "*"
+
+[tasks]
+test = "python -m pytest tests"

@@ -1,0 +1,6 @@
+.pixi/
+# the nightly ROOT wheel is replaced in place, a locked hash goes stale
+pixi.lock
+__pycache__/
+.pytest_cache/
+*.root
