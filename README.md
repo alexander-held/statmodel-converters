@@ -4,9 +4,8 @@ Converters between formats for HistFactory-style statistical models:
 
 | Script | From | To |
 |---|---|---|
-| `RooWorkspace_to_HS3.py` | RooWorkspace in a ROOT file | [HS3](https://github.com/hep-statistics-serialization-standard/hep-statistics-serialization-standard) JSON |
-| `HS3_to_pyhf.py` | HS3 JSON | [pyhf](https://github.com/scikit-hep/pyhf) JSON |
-| `RooWorkspace_to_pyhf.py` | RooWorkspace in a ROOT file | pyhf JSON (both steps in one) |
+| `to_hs3.py` | RooWorkspace in a ROOT file, or HS3 JSON from an older ROOT version | [HS3](https://github.com/hep-statistics-serialization-standard/hep-statistics-serialization-standard) JSON |
+| `to_pyhf.py` | HS3 JSON, or RooWorkspace in a ROOT file | [pyhf](https://github.com/scikit-hep/pyhf) JSON |
 
 Expressions (`RooFormulaVar` scaling a sample) are written as `purefunc` modifiers with `bindings`,
 following [pyhf PR #2717](https://github.com/scikit-hep/pyhf/pull/2717).
@@ -19,7 +18,7 @@ pixi run test
 ```
 
 The environment uses the nightly ROOT wheels built from ROOT master and pyhf from the PR branch.
-`HS3_to_pyhf.py` itself only needs the Python standard library.
+`to_pyhf.py` only needs the Python standard library for current HS3 files, and ROOT for other inputs.
 
 The nightly wheel is replaced in place, so `pixi.lock` is not tracked. CI runs the tests every night
 against the latest wheel, to catch changes in the HS3 export of ROOT.
@@ -27,10 +26,13 @@ against the latest wheel, to catch changes in the HS3 export of ROOT.
 ## Usage
 
 ```
-pixi run python RooWorkspace_to_HS3.py workspace.root model_hs3.json
-pixi run python HS3_to_pyhf.py model_hs3.json model_pyhf.json
-pixi run python RooWorkspace_to_pyhf.py workspace.root model_pyhf.json
+pixi run python to_hs3.py workspace.root model_hs3.json
+pixi run python to_pyhf.py model_hs3.json model_pyhf.json
+pixi run python to_pyhf.py workspace.root model_pyhf.json
 ```
+
+HS3 files written by older ROOT versions (HS3 0.2) use a different layout. Both scripts accept them:
+ROOT reads the file and writes it again in the current layout.
 
 Options: `--workspace` (name, if the file has several), `--data` (dataset, default `obsData`),
 `--poi` (default: first POI in the model), `--fix-other-pois`.

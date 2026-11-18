@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-# convert HistFactory workspaces in HS3 JSON (as written by RooFit) to pyhf JSON
+# convert HistFactory models to pyhf JSON, from HS3 JSON (as written by RooFit) or a RooWorkspace
 # adapted from https://gitlab.cern.ch/cburgard/RooFitUtils/-/blob/master/scripts/json-roofit2pyhf.py
 # expressions are written as purefunc modifiers, see https://github.com/scikit-hep/pyhf/pull/2717
 
@@ -67,8 +67,27 @@ def split_by_bin(sample, bin_functions):
     return samples
 
 
+def hs3_version(hs3):
+    version = hs3.get("metadata", {}).get("hs3_version", "0.3")
+    return tuple(int(v) for v in version.split(".")[:2])
+
+
+def load_hs3(path, workspace=None):
+    """Read HS3 from a JSON file, going through ROOT for ROOT files and HS3 before version 0.3."""
+    if path.endswith(".json"):
+        with open(path) as f:
+            hs3 = json.load(f)
+        if hs3_version(hs3) >= (0, 3):
+            return hs3
+    import to_hs3  # needs ROOT
+
+    return json.loads(to_hs3.export(path, workspace))
+
+
 def convert(hs3, dataset="obsData", poi=None, fix_other_pois=False):
     """Convert a HistFactory workspace from HS3 (dict) to a pyhf workspace (dict)."""
+    if hs3_version(hs3) < (0, 3):
+        raise ValueError("HS3 before version 0.3 is not supported, update the file with to_hs3.py")
     bounds = {}
     constants = {}
     for domain in hs3.get("domains", []):
@@ -264,16 +283,16 @@ def convert(hs3, dataset="obsData", poi=None, fix_other_pois=False):
 
 
 def main():
-    parser = ArgumentParser(description="convert HistFactory workspaces from HS3 JSON to pyhf JSON")
-    parser.add_argument("--poi", default=None, help="default: first POI in the HS3 file")
+    parser = ArgumentParser(description="convert HistFactory models from HS3 JSON or a RooWorkspace to pyhf JSON")
+    parser.add_argument("--workspace", default=None, help="for ROOT files, default: the only workspace")
+    parser.add_argument("--poi", default=None, help="default: first POI in the model")
     parser.add_argument("--data", default="obsData", help="name of the dataset")
     parser.add_argument("--fix-other-pois", action="store_true")
-    parser.add_argument("input", help="HS3 JSON file")
+    parser.add_argument("input", help="HS3 JSON file or ROOT file")
     parser.add_argument("output", help="pyhf JSON output")
     args = parser.parse_args()
-    with open(args.input) as f:
-        hs3 = json.load(f)
     try:
+        hs3 = load_hs3(args.input, args.workspace)
         output = convert(hs3, args.data, args.poi, args.fix_other_pois)
     except ValueError as e:
         sys.exit(f"{args.input}: {e}")

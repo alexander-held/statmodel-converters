@@ -4,7 +4,7 @@ import pyhf
 import pytest
 from pyhf.contrib.extended_modifiers import purefunc
 
-import HS3_to_pyhf
+import to_pyhf
 
 
 def gamma_constraints(name, taus):
@@ -138,7 +138,7 @@ def build_model(ws):
 
 
 def test_structure(hs3):
-    ws = HS3_to_pyhf.convert(hs3)
+    ws = to_pyhf.convert(hs3)
     assert ws["observations"] == [{"name": "SR", "data": [120.0, 430.0]}]
     assert ws["measurements"][0]["config"]["poi"] == "kappa"
     samples = {s["name"]: s for s in ws["channels"][0]["samples"]}
@@ -174,7 +174,7 @@ def test_structure(hs3):
 
 
 def test_model(hs3):
-    model = build_model(HS3_to_pyhf.convert(hs3))
+    model = build_model(to_pyhf.convert(hs3))
     # staterror width from all samples sharing it: sqrt(6^2 + 8^2) / (60 + 40), equal to 1 / sqrt(tau)
     assert model.config.param_set("staterror_SR").sigmas[0] == pytest.approx(0.1)
     fixed = dict(zip(model.config.par_names, model.config.suggested_fixed()))
@@ -195,7 +195,7 @@ def test_model(hs3):
 
 def test_combined_likelihood(hs3):
     # layout written by recent ROOT versions: one combined distribution and dataset
-    reference = HS3_to_pyhf.convert(hs3)
+    reference = to_pyhf.convert(hs3)
     hs3["distributions"].append(
         {"name": "simPdf", "type": "combined_dist", "components": [{"dist": "model_SR", "key": ["SR"]}]}
     )
@@ -203,7 +203,7 @@ def test_combined_likelihood(hs3):
         {"name": "obsData", "type": "combined", "components": [{"dataset": "obsData_SR", "key": ["SR"]}]}
     )
     hs3["likelihoods"] = [{"name": "obsData_likelihood", "distributions": ["simPdf"], "data": ["obsData"]}]
-    assert HS3_to_pyhf.convert(hs3) == reference
+    assert to_pyhf.convert(hs3) == reference
 
 
 def test_free_lumi(hs3):
@@ -213,7 +213,7 @@ def test_free_lumi(hs3):
         {"name": "lumiConstraint", "type": "gaussian_dist", "x": "Lumi", "mean": "nominalLumi", "sigma": 0.02}
     )
     hs3["distributions"][0]["samples"][2]["modifiers"][1]["constraints"] = ["lumiConstraint"]
-    ws = HS3_to_pyhf.convert(hs3)
+    ws = to_pyhf.convert(hs3)
     parameters = {p["name"]: p for p in ws["measurements"][0]["config"]["parameters"]}
     assert parameters["lumi"] == {
         "name": "lumi",
@@ -235,19 +235,21 @@ def test_free_lumi(hs3):
     ],
 )
 def test_expression(expression, expected):
-    assert HS3_to_pyhf.convert_expression(expression)[0] == expected
+    assert to_pyhf.convert_expression(expression)[0] == expected
 
 
 @pytest.mark.parametrize("expression", ["x > 0 ? 1 : 2", "TMath::Pi()*x", "erf(x)"])
 def test_unsupported_expression(hs3, expression):
     hs3["functions"][0]["expression"] = expression
     with pytest.raises(ValueError, match="unsupported expression for kappa2"):
-        HS3_to_pyhf.convert(hs3)
+        to_pyhf.convert(hs3)
 
 
 def test_errors(hs3):
     with pytest.raises(ValueError, match="likelihoods matching"):
-        HS3_to_pyhf.convert(hs3, dataset="asimovData")
+        to_pyhf.convert(hs3, dataset="asimovData")
+    with pytest.raises(ValueError, match="HS3 before version 0.3 is not supported"):
+        to_pyhf.convert(hs3 | {"metadata": {"hs3_version": "0.2"}})
     hs3["distributions"][0]["samples"][2]["modifiers"][3]["interpolation"] = {"in": "poly1", "out": "poly1"}
     with pytest.raises(ValueError, match="unsupported interpolation for sys"):
-        HS3_to_pyhf.convert(hs3)
+        to_pyhf.convert(hs3)

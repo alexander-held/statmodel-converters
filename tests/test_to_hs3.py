@@ -4,10 +4,10 @@ import pyhf
 import pytest
 from pyhf.contrib.extended_modifiers import purefunc
 
-import HS3_to_pyhf
+import to_pyhf
 
 ROOT = pytest.importorskip("ROOT")
-import RooWorkspace_to_HS3  # noqa: E402
+import to_hs3  # noqa: E402
 
 HISTOGRAMS = {
     "data": ([135.0, 262.0], [0.0, 0.0]),
@@ -72,8 +72,8 @@ def workspace_file(tmp_path):
 
 
 def test_workspace_to_pyhf(workspace_file):
-    hs3 = json.loads(RooWorkspace_to_HS3.export(workspace_file))
-    ws = HS3_to_pyhf.convert(hs3)
+    hs3 = json.loads(to_hs3.export(workspace_file))
+    ws = to_pyhf.convert(hs3)
     assert ws["observations"] == [{"name": "SR", "data": [135.0, 262.0]}]
     samples = {s["name"]: s for s in ws["channels"][0]["samples"]}
     assert samples["signal"]["data"] == [10.0, 15.0]
@@ -105,8 +105,8 @@ def test_workspace_to_pyhf(workspace_file):
 
 def test_constant_parameters(tmp_path):
     # free Lumi with its constraint, constant nuisance parameter
-    hs3 = json.loads(RooWorkspace_to_HS3.export(make_workspace(tmp_path, ["alpha_bkg_norm"])))
-    ws = HS3_to_pyhf.convert(hs3)
+    hs3 = json.loads(to_hs3.export(make_workspace(tmp_path, ["alpha_bkg_norm"])))
+    ws = to_pyhf.convert(hs3)
     parameters = {p["name"]: p for p in ws["measurements"][0]["config"]["parameters"]}
     assert parameters["bkg_norm"]["fixed"] and parameters["bkg_norm"]["inits"] == [0.0]
     assert not parameters["lumi"]["fixed"]
@@ -116,6 +116,24 @@ def test_constant_parameters(tmp_path):
     assert "lumi" in modifiers["background"]
 
 
+def test_update_hs3(workspace_file, tmp_path):
+    # reading an HS3 file and writing it again gives the same model
+    hs3 = to_hs3.export(workspace_file)
+    path = tmp_path / "model.json"
+    path.write_text(hs3)
+    updated = to_hs3.export(str(path))
+    assert to_pyhf.convert(json.loads(updated)) == to_pyhf.convert(json.loads(hs3))
+
+
+def test_load_hs3(workspace_file, tmp_path):
+    # ROOT files and HS3 files from older versions go through ROOT, current HS3 is read directly
+    hs3 = json.loads(to_hs3.export(workspace_file))
+    assert to_pyhf.load_hs3(workspace_file) == hs3
+    path = tmp_path / "old.json"
+    path.write_text(json.dumps(hs3 | {"metadata": {"hs3_version": "0.2"}}))
+    assert to_pyhf.load_hs3(str(path))["metadata"]["hs3_version"] == "0.3"
+
+
 def test_workspace_name(workspace_file):
     with pytest.raises(ValueError, match="no RooWorkspace named"):
-        RooWorkspace_to_HS3.export(workspace_file, "missing")
+        to_hs3.export(workspace_file, "missing")
