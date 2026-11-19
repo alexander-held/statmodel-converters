@@ -7,23 +7,39 @@ from pyhf.contrib.extended_modifiers import purefunc
 import to_pyhf
 
 
-def gamma_constraints(name, taus):
+def gamma_constraints(name, taus, array):
     """Poisson constraint terms, product functions and domain entries for per-bin parameters."""
     distributions, functions, axes = [], [], []
     for i, tau in enumerate(taus):
         par = f"{name}_bin_{i}"
         distributions.append(
-            {"name": f"{par}_constraint", "type": "poisson_dist", "mean": f"{par}_poisMean", "x": f"nom_{par}"}
+            {
+                "name": f"{par}_constraint",
+                "type": "poisson_continuous_dist",
+                "mean": f"{par}_poisMean",
+                "x": f"nom_{par}",
+            }
         )
         functions.append({"name": f"{par}_poisMean", "type": "product", "factors": [par, f"{par}_tau"]})
         axes.append({"name": f"{par}_tau", "value": tau})
+    if array:
+        # grouped as written by ROOT, the components have no name
+        components = [{"mean": d["mean"], "x": d["x"]} for d in distributions]
+        distributions = [
+            {
+                "name": "poisson_constraints",
+                "type": "array_dist",
+                "component_type": "poisson_continuous_dist",
+                "components": components,
+            }
+        ] * len(taus)
     return distributions, functions, axes
 
 
 @pytest.fixture
 def hs3():
-    stat_dists, stat_funcs, stat_axes = gamma_constraints("gamma_stat_SR", [100.0, 40000.0])
-    shape_dists, shape_funcs, shape_axes = gamma_constraints("gamma_shape", [25.0, 400.0])
+    stat_dists, stat_funcs, stat_axes = gamma_constraints("gamma_stat_SR", [100.0, 40000.0], array=True)
+    shape_dists, shape_funcs, shape_axes = gamma_constraints("gamma_shape", [25.0, 400.0], array=False)
     staterror = {
         "name": "staterror",
         "type": "staterror",
@@ -85,7 +101,7 @@ def hs3():
     ]
     return {
         "distributions": [{"name": "model_SR", "type": "histfactory_dist", "samples": samples}]
-        + stat_dists
+        + stat_dists[:1]
         + shape_dists,
         "functions": [
             {"name": "kappa2", "type": "generic", "expression": "pow(kappa*cos(a*acos(-1)),2)"},

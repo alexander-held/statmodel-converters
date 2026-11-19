@@ -6,7 +6,7 @@ on:
   pull_request:
   workflow_dispatch:
   schedule:
-    - cron: "0 7 * * *" # after the nightly ROOT wheels are published
+    - cron: "23 10 * * *" # after the nightly ROOT wheels are published
 
 jobs:
   test:

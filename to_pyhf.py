@@ -103,6 +103,20 @@ def convert(hs3, dataset="obsData", poi=None, fix_other_pois=False):
     functions = {f["name"]: f for f in hs3.get("functions", [])}
     distributions = {d["name"]: d for d in hs3["distributions"]}
 
+    # constraint term of each parameter, written on its own or as a component of an array_dist
+    constraints = {}
+    for dist in hs3["distributions"]:
+        ctype = dist.get("component_type", dist["type"])
+        for component in dist.get("components", [dist]):
+            if ctype == "gaussian_dist":
+                names = [component["mean"], component["x"]]
+            elif ctype in ("poisson_dist", "poisson_continuous_dist"):
+                # the mean is the product of the parameter and tau
+                names = functions.get(component["mean"], {}).get("factors", [])
+            else:
+                continue
+            constraints.update({name: (ctype, component) for name in names if isinstance(name, str)})
+
     # the likelihood of the requested dataset pairs up distributions and data
     likelihoods = [lh for lh in hs3["likelihoods"] if dataset in lh["name"]]
     if len(likelihoods) != 1:
@@ -159,20 +173,22 @@ def convert(hs3, dataset="obsData", poi=None, fix_other_pois=False):
 
     def rel_uncertainties(modifier):
         """Constraint type and relative uncertainty per bin for a constrained shapefactor."""
-        constraints = [distributions[name] for name in modifier["constraints"]]
-        types = {constraint["type"] for constraint in constraints}
-        if types == {"poisson_dist"}:
-            # the mean is the product of the parameter and tau = 1 / (relative uncertainty)^2
-            taus = []
-            for constraint in constraints:
-                factors = functions[constraint["mean"]]["factors"]
-                (tau,) = [f for f in factors if f not in modifier["parameters"]]
-                taus.append(constants[tau])
-            return "poisson", [1 / sqrt(tau) for tau in taus]
-        if types == {"gaussian_dist"}:
-            sigmas = [constraint["sigma"] for constraint in constraints]
-            return "gaussian", [constants[s] if isinstance(s, str) else s for s in sigmas]
-        raise ValueError(f"unsupported constraints for {modifier['name']}")
+        types, rel = set(), []
+        for parameter in modifier["parameters"]:
+            if parameter not in constraints:
+                raise ValueError(f"unsupported constraints for {modifier['name']}")
+            ctype, constraint = constraints[parameter]
+            if ctype == "gaussian_dist":
+                sigma = constraint["sigma"]
+                rel.append(constants[sigma] if isinstance(sigma, str) else sigma)
+            else:
+                # tau = 1 / (relative uncertainty)^2
+                (tau,) = [f for f in functions[constraint["mean"]]["factors"] if f != parameter]
+                rel.append(1 / sqrt(constants[tau]))
+            types.add("gaussian" if ctype == "gaussian_dist" else "poisson")
+        if len(types) != 1:
+            raise ValueError(f"unsupported constraints for {modifier['name']}")
+        return types.pop(), rel
 
     def prune(modifier, uncertainties):
         """Remove uncertainties of bins with constant parameters (pruned), pyhf then fixes them."""
@@ -207,7 +223,7 @@ def convert(hs3, dataset="obsData", poi=None, fix_other_pois=False):
                     add_parameter("lumi", parname)
                     if modifier.get("constraints"):
                         # Gaussian constraint, the global observable is the term that is not the parameter
-                        constraint = distributions[modifier["constraints"][0]]
+                        _, constraint = constraints[parname]
                         (nominal,) = {constraint["mean"], constraint["x"]} - {parname}
                         sigma = constraint["sigma"]
                         parameters["lumi"]["auxdata"] = [defaults.get(nominal, {}).get("value", 1.0)]

@@ -21,7 +21,8 @@ The environment uses the nightly ROOT wheels built from ROOT master and pyhf fro
 `to_pyhf.py` only needs the Python standard library for current HS3 files, and ROOT for other inputs.
 
 The nightly wheel is replaced in place, so `pixi.lock` is not tracked. CI runs the tests every night
-against the latest wheel, to catch changes in the HS3 export of ROOT.
+against the latest wheel, to catch changes in the HS3 export of ROOT. Locally, `pixi reinstall root`
+picks up a new nightly.
 
 ## Usage
 
